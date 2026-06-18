@@ -1,8 +1,37 @@
 from app import db
 from datetime import datetime, timedelta
-from sqlalchemy.dialects.postgresql import UUID, ENUM
 import uuid
 import bcrypt
+
+
+# Cross-database compatible UUID type
+import sqlalchemy.types as types
+
+class GUID(types.TypeDecorator):
+    """Platform-independent GUID type.
+    Uses PostgreSQL's UUID type when available, otherwise CHAR(32)."""
+    impl = types.CHAR(32)
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            from sqlalchemy.dialects.postgresql import UUID
+            return dialect.type_descriptor(GUID())
+        return dialect.type_descriptor(types.CHAR(32))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if dialect.name == 'postgresql':
+            return value
+        return str(value).replace('-', '') if isinstance(value, uuid.UUID) else value.replace('-', '')
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        if dialect.name == 'postgresql':
+            return value
+        return uuid.UUID(value) if isinstance(value, str) else value
 
 # Enums
 class UserRole:
@@ -35,7 +64,7 @@ class User(db.Model):
     """Base User model"""
     __tablename__ = 'users'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     first_name = db.Column(db.String(100), nullable=False)
@@ -95,8 +124,8 @@ class DoctorProfile(db.Model):
     """Doctor-specific profile information"""
     __tablename__ = 'doctor_profiles'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False, unique=True)
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(GUID(), db.ForeignKey('users.id'), nullable=False, unique=True)
     license_number = db.Column(db.String(100), unique=True, nullable=False)
     specialty = db.Column(db.String(100), nullable=False)
     bio = db.Column(db.Text)
@@ -134,8 +163,8 @@ class DoctorAvailability(db.Model):
     """Doctor availability slots"""
     __tablename__ = 'doctor_availability'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    doctor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('doctor_profiles.id'), nullable=False)
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    doctor_id = db.Column(GUID(), db.ForeignKey('doctor_profiles.id'), nullable=False)
     date = db.Column(db.Date, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
@@ -147,9 +176,9 @@ class Appointment(db.Model):
     """Appointment model"""
     __tablename__ = 'appointments'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    patient_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
-    doctor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    patient_id = db.Column(GUID(), db.ForeignKey('users.id'), nullable=False)
+    doctor_id = db.Column(GUID(), db.ForeignKey('users.id'), nullable=False)
     appointment_date = db.Column(db.Date, nullable=False)
     appointment_time = db.Column(db.Time, nullable=False)
     reason = db.Column(db.Text, nullable=False)
@@ -181,9 +210,9 @@ class MedicalReport(db.Model):
     """Medical report model"""
     __tablename__ = 'medical_reports'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    patient_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
-    doctor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    patient_id = db.Column(GUID(), db.ForeignKey('users.id'), nullable=False)
+    doctor_id = db.Column(GUID(), db.ForeignKey('users.id'))
     report_type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
@@ -218,9 +247,9 @@ class Prescription(db.Model):
     """Prescription model"""
     __tablename__ = 'prescriptions'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    patient_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
-    doctor_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'), nullable=False)
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    patient_id = db.Column(GUID(), db.ForeignKey('users.id'), nullable=False)
+    doctor_id = db.Column(GUID(), db.ForeignKey('users.id'), nullable=False)
     prescribed_date = db.Column(db.Date, nullable=False, default=datetime.utcnow().date)
     expiry_date = db.Column(db.Date)
     status = db.Column(db.String(50), default=PrescriptionStatus.ACTIVE)
@@ -251,8 +280,8 @@ class Medication(db.Model):
     """Medication in a prescription"""
     __tablename__ = 'medications'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    prescription_id = db.Column(UUID(as_uuid=True), db.ForeignKey('prescriptions.id'), nullable=False)
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    prescription_id = db.Column(GUID(), db.ForeignKey('prescriptions.id'), nullable=False)
     name = db.Column(db.String(255), nullable=False)
     dosage = db.Column(db.String(100), nullable=False)
     frequency = db.Column(db.String(100), nullable=False)
@@ -279,8 +308,8 @@ class SymptomAnalysis(db.Model):
     """Symptom analysis history"""
     __tablename__ = 'symptom_analysis'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(GUID(), db.ForeignKey('users.id'))
     symptoms = db.Column(db.Text, nullable=False)  # JSON array
     analysis_result = db.Column(db.Text, nullable=False)  # JSON
     severity = db.Column(db.String(50))
@@ -305,8 +334,8 @@ class AuditLog(db.Model):
     """Audit log for tracking user actions"""
     __tablename__ = 'audit_logs'
     
-    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.id'))
+    id = db.Column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id = db.Column(GUID(), db.ForeignKey('users.id'))
     action = db.Column(db.String(255), nullable=False)
     resource_type = db.Column(db.String(100))
     resource_id = db.Column(db.String(255))

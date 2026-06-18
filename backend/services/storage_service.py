@@ -1,8 +1,5 @@
 import os
 from typing import Optional
-import boto3
-from google.cloud import storage as gcs
-from azure.storage.blob import BlobServiceClient
 import io
 
 class StorageService:
@@ -14,6 +11,7 @@ class StorageService:
         self.provider = config.get('STORAGE_PROVIDER', 'local')
         
         if self.provider == 's3':
+            import boto3
             self.s3_client = boto3.client(
                 's3',
                 aws_access_key_id=config.get('AWS_ACCESS_KEY_ID'),
@@ -23,12 +21,14 @@ class StorageService:
             self.bucket = config.get('AWS_S3_BUCKET')
         
         elif self.provider == 'gcs':
+            from google.cloud import storage as gcs
             self.gcs_client = gcs.Client.from_service_account_json(
                 config.get('GCS_CREDENTIALS_PATH')
             )
             self.bucket = self.gcs_client.bucket(config.get('GCS_BUCKET_NAME'))
         
         elif self.provider == 'azure':
+            from azure.storage.blob import BlobServiceClient
             self.azure_client = BlobServiceClient.from_connection_string(
                 config.get('AZURE_STORAGE_CONNECTION_STRING')
             )

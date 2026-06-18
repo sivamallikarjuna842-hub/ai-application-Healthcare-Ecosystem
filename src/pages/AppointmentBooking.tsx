@@ -38,7 +38,7 @@ const DOCTORS = [
 export const AppointmentBooking = () => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const addAppointment = useAppointmentStore((state) => state.addAppointment);
+  const createAppointment = useAppointmentStore((state) => state.createAppointment);
 
   const [formData, setFormData] = useState({
     selectedDoctor: null as (typeof DOCTORS)[0] | null,
@@ -64,27 +64,22 @@ export const AppointmentBooking = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.selectedDoctor || !formData.date || !formData.time || !formData.reason) {
       return;
     }
 
-    const appointment = {
-      id: Date.now().toString(),
-      patientId: user?.id || '',
-      patientName: user?.name || '',
-      doctorId: formData.selectedDoctor.id,
-      doctorName: formData.selectedDoctor.name,
-      date: formData.date,
-      time: formData.time,
+    await createAppointment({
+      doctor_id: formData.selectedDoctor.id,
+      appointment_date: formData.date,
+      appointment_time: formData.time,
       reason: formData.reason,
-      status: 'scheduled' as const,
-    };
+    });
 
-    addAppointment(appointment);
     setSuccessMessage(`Appointment booked successfully with ${formData.selectedDoctor.name}!`);
+
     setFormData({
       selectedDoctor: null,
       date: '',

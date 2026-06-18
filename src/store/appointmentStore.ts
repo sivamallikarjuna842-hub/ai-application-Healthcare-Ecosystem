@@ -1,73 +1,75 @@
 import { create } from 'zustand';
+import { api } from '../utils/api';
 
 export interface Appointment {
   id: string;
   patientId: string;
-  patientName: string;
+  patientName?: string;
   doctorId: string;
-  doctorName: string;
-  date: string;
-  time: string;
+  doctorName?: string;
+  appointment_date: string;
+  appointment_time: string;
   reason: string;
   status: 'scheduled' | 'completed' | 'cancelled';
   notes?: string;
 }
 
+type AppointmentRole = 'patient' | 'doctor';
+
 interface AppointmentState {
+  loading: boolean;
   appointments: Appointment[];
-  addAppointment: (appointment: Appointment) => void;
-  updateAppointment: (id: string, appointment: Partial<Appointment>) => void;
-  cancelAppointment: (id: string) => void;
-  getAppointments: (userId: string, role: 'patient' | 'doctor') => Appointment[];
+
+  refresh: (role: AppointmentRole) => Promise<void>;
+  createAppointment: (payload: {
+    doctor_id: string;
+    appointment_date: string; // date-only (YYYY-MM-DD)
+    appointment_time: string; // time string
+    reason: string;
+    notes?: string;
+  }) => Promise<void>;
 }
 
-export const useAppointmentStore = create<AppointmentState>((set, get) => ({
-  appointments: [
-    {
-      id: '1',
-      patientId: 'p1',
-      patientName: 'John Doe',
-      doctorId: 'd1',
-      doctorName: 'Dr. Sarah Johnson',
-      date: '2024-01-20',
-      time: '10:00 AM',
-      reason: 'Regular checkup',
-      status: 'scheduled',
-    },
-    {
-      id: '2',
-      patientId: 'p2',
-      patientName: 'Jane Smith',
-      doctorId: 'd1',
-      doctorName: 'Dr. Sarah Johnson',
-      date: '2024-01-21',
-      time: '02:00 PM',
-      reason: 'Follow-up consultation',
-      status: 'scheduled',
-    },
-  ],
-  addAppointment: (appointment) =>
-    set((state) => ({
-      appointments: [...state.appointments, appointment],
-    })),
-  updateAppointment: (id, updates) =>
-    set((state) => ({
-      appointments: state.appointments.map((apt) =>
-        apt.id === id ? { ...apt, ...updates } : apt
-      ),
-    })),
-  cancelAppointment: (id) =>
-    set((state) => ({
-      appointments: state.appointments.map((apt) =>
-        apt.id === id ? { ...apt, status: 'cancelled' } : apt
-      ),
-    })),
-  getAppointments: (userId, role) => {
-    const state = get();
-    if (role === 'patient') {
-      return state.appointments.filter((apt) => apt.patientId === userId);
-    } else {
-      return state.appointments.filter((apt) => apt.doctorId === userId);
+export const useAppointmentStore = create<AppointmentState>((set) => ({
+  loading: false,
+  appointments: [],
+
+  refresh: async (role) => {
+    set({ loading: true });
+    try {
+      // Backend filters by JWT identity, role argument is not needed; keep for future.
+      const res = await api.get(`/appointments`, {
+        params: role ? { status: undefined } : undefined,
+      });
+
+      const data = res.data;
+      const list: Appointment[] = data?.data || [];
+      set({ appointments: list });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  createAppointment: async (payload) => {
+    set({ loading: true });
+    try {
+      await api.post(`/appointments`, {
+        doctor_id: payload.doctor_id,
+        appointment_date: payload.appointment_date,
+        appointment_time: payload.appointment_time,
+        reason: payload.reason,
+        notes: payload.notes,
+      });
+
+      // Refresh is handled by the caller or route; do it here for UX.
+      // Caller may also navigate away.
+      // Note: we don't know patient/doctor role reliably here, so just re-fetch.
+      // JWT identity determines role on backend.
+      const meRes = await api.get('/dashboard/patient');
+      void meRes;
+    } finally {
+      set({ loading: false });
     }
   },
 }));
+

@@ -1,5 +1,6 @@
 import os
 import logging
+import uuid
 from flask import Flask
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -10,6 +11,55 @@ from datetime import datetime
 # Initialize extensions
 db = SQLAlchemy()
 jwt = JWTManager()
+
+def seed_demo_users():
+    """Seed demo users if none exist"""
+    from models import User, UserRole, DoctorProfile
+    if User.query.first() is not None:
+        return
+    print("Seeding demo users...")
+    patient = User(
+        id=uuid.uuid4(),
+        email='patient@example.com',
+        first_name='John',
+        last_name='Doe',
+        phone='+1-555-0100',
+        gender='Male',
+        role=UserRole.PATIENT,
+        is_active=True,
+        email_verified=True
+    )
+    patient.set_password('demo')
+    db.session.add(patient)
+    doctor = User(
+        id=uuid.uuid4(),
+        email='doctor@example.com',
+        first_name='Sarah',
+        last_name='Johnson',
+        phone='+1-555-0200',
+        gender='Female',
+        role=UserRole.DOCTOR,
+        is_active=True,
+        email_verified=True
+    )
+    doctor.set_password('demo')
+    db.session.add(doctor)
+    db.session.commit()
+    doctor_profile = DoctorProfile(
+        id=uuid.uuid4(),
+        user_id=doctor.id,
+        license_number='MD-12345',
+        specialty='General Medicine',
+        bio='Experienced general practitioner with 10+ years of practice',
+        experience_years=10,
+        qualification='MD from State University',
+        hospital_affiliation='City Medical Center',
+        consultation_fee=50.0,
+        is_verified=True
+    )
+    db.session.add(doctor_profile)
+    db.session.commit()
+    print("[OK] Demo users seeded (patient@example.com / doctor@example.com, password: demo)")
 
 def create_app(config_name=None):
     """Application factory"""
@@ -38,6 +88,7 @@ def create_app(config_name=None):
     # Create tables
     with app.app_context():
         db.create_all()
+        seed_demo_users()
     
     # Health check route
     @app.route('/health', methods=['GET'])
@@ -54,7 +105,7 @@ def create_app(config_name=None):
 def register_blueprints(app):
     """Register all API blueprints"""
     from routes import auth_routes, appointment_routes, report_routes, \
-                       prescription_routes, user_routes, doctor_routes, \
+                       prescription_routes, user_routes, \
                        ai_routes, dashboard_routes
     
     # Auth routes

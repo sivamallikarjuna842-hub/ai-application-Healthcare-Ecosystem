@@ -13,16 +13,16 @@ def init_database():
     with app.app_context():
         print("Creating database tables...")
         db.create_all()
-        print("✓ Database tables created successfully")
+        print("[OK] Database tables created successfully")
         
         # Check if demo users exist
-        if not User.query.filter_by(email='demo_patient@example.com').first():
+        if not User.query.filter_by(email='patient@example.com').first():
             print("\nCreating demo users...")
             
             # Demo Patient
             patient = User(
                 id=uuid.uuid4(),
-                email='demo_patient@example.com',
+                email='patient@example.com',
                 first_name='John',
                 last_name='Doe',
                 phone='+1-555-0100',
@@ -31,13 +31,13 @@ def init_database():
                 is_active=True,
                 email_verified=True
             )
-            patient.set_password('demo123')
+            patient.set_password('demo')
             db.session.add(patient)
             
             # Demo Doctor
             doctor = User(
                 id=uuid.uuid4(),
-                email='demo_doctor@example.com',
+                email='doctor@example.com',
                 first_name='Sarah',
                 last_name='Johnson',
                 phone='+1-555-0200',
@@ -46,7 +46,7 @@ def init_database():
                 is_active=True,
                 email_verified=True
             )
-            doctor.set_password('demo123')
+            doctor.set_password('demo')
             db.session.add(doctor)
             
             db.session.commit()
@@ -67,11 +67,11 @@ def init_database():
             db.session.add(doctor_profile)
             db.session.commit()
             
-            print("✓ Demo users created:")
-            print(f"  - Patient: {patient.email} (password: demo123)")
-            print(f"  - Doctor: {doctor.email} (password: demo123)")
+            print("[OK] Demo users created:")
+            print(f"  - Patient: {patient.email} (password: demo)")
+            print(f"  - Doctor: {doctor.email} (password: demo)")
         
-        print("\n✓ Database initialization complete!")
+        print("\n[OK] Database initialization complete!")
 
 
 def seed_database():
@@ -83,8 +83,8 @@ def seed_database():
         from datetime import date, time
         
         # Get demo users
-        patient = User.query.filter_by(email='demo_patient@example.com').first()
-        doctor = User.query.filter_by(email='demo_doctor@example.com').first()
+        patient = User.query.filter_by(email='patient@example.com').first()
+        doctor = User.query.filter_by(email='doctor@example.com').first()
         
         if not patient or not doctor:
             print("Demo users not found. Run init_database() first.")
@@ -105,7 +105,7 @@ def seed_database():
             )
             db.session.add(appointment)
             db.session.commit()
-            print("✓ Sample appointment created")
+            print("[OK] Sample appointment created")
         
         # Create sample medical report if none exist
         if not MedicalReport.query.first():
@@ -125,7 +125,7 @@ def seed_database():
             )
             db.session.add(report)
             db.session.commit()
-            print("✓ Sample medical report created")
+            print("[OK] Sample medical report created")
         
         # Create sample prescription if none exist
         if not Prescription.query.first():
@@ -168,9 +168,9 @@ def seed_database():
             db.session.add(medication1)
             db.session.add(medication2)
             db.session.commit()
-            print("✓ Sample prescription created with medications")
+            print("[OK] Sample prescription created with medications")
         
-        print("\n✓ Database seeding complete!")
+        print("\n[OK] Database seeding complete!")
 
 
 if __name__ == '__main__':
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     try:
         init_database()
         seed_database()
-        print("\n✅ All done! Ready to start the application.")
+        print("\nAll done! Ready to start the application.")
     except Exception as e:
-        print(f"\n❌ Error: {str(e)}")
+        print(f"\nError: {str(e)}")
         raise

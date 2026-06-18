@@ -30,33 +30,16 @@ export const LoginPage = () => {
       return;
     }
 
-    // Demo login - in production this would call a backend API
-    const mockUsers: any = {
-      'patient@example.com': {
-        id: 'p1',
-        name: 'John Doe',
-        email: 'patient@example.com',
-        role: 'patient',
-        avatar: '👨‍💼',
-      },
-      'doctor@example.com': {
-        id: 'd1',
-        name: 'Dr. Sarah Johnson',
-        email: 'doctor@example.com',
-        role: 'doctor',
-        specialty: 'General Medicine',
-        licenseNumber: 'MD123456',
-        avatar: '👩‍⚕️',
-      },
-    };
-
-    const user = mockUsers[formData.email];
-    if (user && formData.password === 'demo') {
-      login(user);
-      navigate('/');
-    } else {
-      setError('Invalid credentials. Try patient@example.com or doctor@example.com with password "demo"');
-    }
+    (async () => {
+      try {
+        const { loginRequest } = await import('../utils/auth');
+        const user = await loginRequest(formData.email, formData.password);
+        login(user);
+        navigate('/');
+      } catch (e: any) {
+        setError(e?.message || 'Login failed');
+      }
+    })();
   };
 
   return (

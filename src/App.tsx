@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { LoginPage } from './pages/LoginPage';
 import { PatientDashboard } from './pages/PatientDashboard';
@@ -10,7 +11,13 @@ import { Prescriptions } from './pages/Prescriptions';
 import { ReportSummarization } from './pages/ReportSummarization';
 
 function App() {
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, hydrate } = useAuthStore();
+
+  useEffect(() => {
+    // Hydrate auth state from persisted JWT (if present)
+    void hydrate();
+  }, [hydrate]);
+
 
   return (
     <Router>

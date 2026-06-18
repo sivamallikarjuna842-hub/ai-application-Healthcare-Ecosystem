@@ -1,111 +1,163 @@
 import { create } from 'zustand';
+import { api } from '../utils/api';
 
 export interface MedicalReport {
   id: string;
-  patientId: string;
-  patientName: string;
-  doctorId: string;
-  doctorName: string;
-  date: string;
-  type: 'lab_test' | 'x_ray' | 'ultrasound' | 'mri' | 'ct_scan' | 'blood_test' | 'other';
+  patient_id: string;
+  patientName?: string;
+  doctor_id: string;
+  doctorName?: string;
+  date?: string;
+  report_type: string;
   title: string;
   description: string;
-  fileUrl: string;
+  file_url?: string;
   summary?: string;
 }
 
 export interface Prescription {
   id: string;
-  patientId: string;
-  patientName: string;
-  doctorId: string;
-  doctorName: string;
-  date: string;
-  medications: {
+  patient_id: string;
+  doctor_id: string;
+  prescribed_date?: string;
+  status: 'active' | 'expired' | 'completed' | string;
+  instructions?: string;
+  medications?: {
     name: string;
     dosage: string;
     frequency: string;
     duration: string;
   }[];
-  instructions?: string;
-  status: 'active' | 'expired' | 'completed';
 }
 
-interface MedicalState {
+type LoadingState = {
+  loadingReports: boolean;
+  loadingPrescriptions: boolean;
+};
+
+interface MedicalState extends LoadingState {
   reports: MedicalReport[];
   prescriptions: Prescription[];
+
+  refreshReports: (args?: { patient_id?: string }) => Promise<void>;
+  refreshPrescriptions: () => Promise<void>;
+
+  uploadReport: (payload: {
+    patient_id: string;
+    report_type: string;
+    title: string;
+    description: string;
+    file: File;
+    tags?: string;
+  }) => Promise<void>;
+
+  summarizeReport: (report_id: string, content?: string) => Promise<void>;
+
+  deleteReport: (report_id: string) => Promise<void>;
+  deletePrescription: (prescription_id: string) => Promise<void>;
+
+  // Backward-compatible methods used by pages (will map to API refresh)
   addReport: (report: MedicalReport) => void;
   addPrescription: (prescription: Prescription) => void;
   getReports: (patientId: string) => MedicalReport[];
   getPrescriptions: (patientId: string) => Prescription[];
   updateReport: (id: string, updates: Partial<MedicalReport>) => void;
-  deletePrescription: (id: string) => void;
 }
 
 export const useMedicalStore = create<MedicalState>((set, get) => ({
-  reports: [
-    {
-      id: '1',
-      patientId: 'p1',
-      patientName: 'John Doe',
-      doctorId: 'd1',
-      doctorName: 'Dr. Sarah Johnson',
-      date: '2024-01-10',
-      type: 'blood_test',
-      title: 'Complete Blood Count',
-      description: 'Routine blood work showing normal levels',
-      fileUrl: '/reports/cbc-2024-01-10.pdf',
-      summary: 'CBC results show all values within normal range. WBC: 7.2, RBC: 4.8, HGB: 13.5',
-    },
-  ],
-  prescriptions: [
-    {
-      id: '1',
-      patientId: 'p1',
-      patientName: 'John Doe',
-      doctorId: 'd1',
-      doctorName: 'Dr. Sarah Johnson',
-      date: '2024-01-15',
-      medications: [
-        {
-          name: 'Lisinopril',
-          dosage: '10mg',
-          frequency: 'Once daily',
-          duration: '30 days',
-        },
-        {
-          name: 'Aspirin',
-          dosage: '100mg',
-          frequency: 'Once daily',
-          duration: '30 days',
-        },
-      ],
-      instructions: 'Take with food. Avoid alcohol.',
-      status: 'active',
-    },
-  ],
-  addReport: (report) =>
-    set((state) => ({
-      reports: [...state.reports, report],
-    })),
+  loadingReports: false,
+  loadingPrescriptions: false,
+
+  reports: [],
+  prescriptions: [],
+
+  refreshReports: async (args) => {
+    set({ loadingReports: true });
+    try {
+      const res = await api.get('/reports', {
+        params: args?.patient_id ? { patient_id: args.patient_id } : undefined,
+      });
+      const list = res.data?.data || [];
+      set({ reports: list });
+    } finally {
+      set({ loadingReports: false });
+    }
+  },
+
+  refreshPrescriptions: async () => {
+    set({ loadingPrescriptions: true });
+    try {
+      const res = await api.get('/prescriptions');
+      const list = res.data?.data || [];
+      set({ prescriptions: list });
+    } finally {
+      set({ loadingPrescriptions: false });
+    }
+  },
+
+  uploadReport: async (payload) => {
+    set({ loadingReports: true });
+    try {
+      const form = new FormData();
+      form.append('file', payload.file);
+      form.append('patient_id', payload.patient_id);
+      form.append('report_type', payload.report_type);
+      form.append('title', payload.title);
+      form.append('description', payload.description);
+      if (payload.tags) form.append('tags', payload.tags);
+
+      await api.post('/reports', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      await get().refreshReports({ patient_id: payload.patient_id });
+    } finally {
+      set({ loadingReports: false });
+    }
+  },
+
+  summarizeReport: async (report_id, content) => {
+    set({ loadingReports: true });
+    try {
+      await api.post('/ai/summarize-report', {
+        report_id,
+        content,
+      });
+      await get().refreshReports();
+    } finally {
+      set({ loadingReports: false });
+    }
+  },
+
+  deleteReport: async (report_id) => {
+    set({ loadingReports: true });
+    try {
+      await api.delete(`/reports/${report_id}`);
+      set({ reports: get().reports.filter((r) => r.id !== report_id) });
+    } finally {
+      set({ loadingReports: false });
+    }
+  },
+
+  deletePrescription: async (prescription_id) => {
+    set({ loadingPrescriptions: true });
+    try {
+      await api.delete(`/prescriptions/${prescription_id}`);
+      set({
+        prescriptions: get().prescriptions.filter((p) => p.id !== prescription_id),
+      });
+    } finally {
+      set({ loadingPrescriptions: false });
+    }
+  },
+
+  // Compatibility layer (keeps current pages compiling)
+  addReport: (report) => set((s) => ({ reports: [...s.reports, report] })),
   addPrescription: (prescription) =>
-    set((state) => ({
-      prescriptions: [...state.prescriptions, prescription],
-    })),
-  getReports: (patientId) => {
-    return get().reports.filter((r) => r.patientId === patientId);
-  },
-  getPrescriptions: (patientId) => {
-    return get().prescriptions.filter((p) => p.patientId === patientId);
-  },
+    set((s) => ({ prescriptions: [...s.prescriptions, prescription] })),
+  getReports: (patientId) => get().reports.filter((r) => r.patient_id === patientId),
+  getPrescriptions: (patientId) => get().prescriptions.filter((p) => p.patient_id === patientId),
   updateReport: (id, updates) =>
-    set((state) => ({
-      reports: state.reports.map((r) =>
-        r.id === id ? { ...r, ...updates } : r
-      ),
-    })),
-  deletePrescription: (id) =>
-    set((state) => ({
-      prescriptions: state.prescriptions.filter((p) => p.id !== id),
-    })),
+    set((s) => ({ reports: s.reports.map((r) => (r.id === id ? { ...r, ...updates } : r)) })),
 }));
+

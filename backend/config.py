@@ -21,8 +21,8 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
-    # CORS
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:3000').split(',')
+    # CORS - allow all localhost origins for development
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000').split(',')
     
     # File Upload
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB

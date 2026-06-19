@@ -9,6 +9,8 @@ export interface Appointment {
   doctorName?: string;
   appointment_date: string;
   appointment_time: string;
+  date?: string;
+  time?: string;
   reason: string;
   status: 'scheduled' | 'completed' | 'cancelled';
   notes?: string;
@@ -28,9 +30,10 @@ interface AppointmentState {
     reason: string;
     notes?: string;
   }) => Promise<void>;
+  getAppointments: (userId: string, role: AppointmentRole) => Appointment[];
 }
 
-export const useAppointmentStore = create<AppointmentState>((set) => ({
+export const useAppointmentStore = create<AppointmentState>((set, get) => ({
   loading: false,
   appointments: [],
 
@@ -43,11 +46,29 @@ export const useAppointmentStore = create<AppointmentState>((set) => ({
       });
 
       const data = res.data;
-      const list: Appointment[] = data?.data || [];
+      const list: Appointment[] = (data?.data || []).map((apt: any) => ({
+        id: apt.id,
+        patientId: apt.patient_id,
+        patientName: apt.patient_name,
+        doctorId: apt.doctor_id,
+        doctorName: apt.doctor_name,
+        appointment_date: apt.appointment_date,
+        appointment_time: apt.appointment_time,
+        reason: apt.reason,
+        status: apt.status,
+        notes: apt.notes,
+        // Keep backward compat for dashboards that use date/time fields
+        date: apt.appointment_date,
+        time: apt.appointment_time,
+      }));
       set({ appointments: list });
     } finally {
       set({ loading: false });
     }
+  },
+
+  getAppointments: (userId, role) => {
+    return get().appointments;
   },
 
   createAppointment: async (payload) => {
@@ -61,12 +82,8 @@ export const useAppointmentStore = create<AppointmentState>((set) => ({
         notes: payload.notes,
       });
 
-      // Refresh is handled by the caller or route; do it here for UX.
-      // Caller may also navigate away.
-      // Note: we don't know patient/doctor role reliably here, so just re-fetch.
-      // JWT identity determines role on backend.
-      const meRes = await api.get('/dashboard/patient');
-      void meRes;
+      // Refresh appointments after creation
+      await get().refresh('patient');
     } finally {
       set({ loading: false });
     }

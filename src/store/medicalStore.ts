@@ -8,11 +8,15 @@ export interface MedicalReport {
   doctor_id: string;
   doctorName?: string;
   date?: string;
+  created_at?: string;
   report_type: string;
   title: string;
   description: string;
   file_url?: string;
   summary?: string;
+  ai_summary?: string;
+  is_summarized?: boolean;
+  tags?: string;
 }
 
 export interface Prescription {
@@ -77,7 +81,23 @@ export const useMedicalStore = create<MedicalState>((set, get) => ({
       const res = await api.get('/reports', {
         params: args?.patient_id ? { patient_id: args.patient_id } : undefined,
       });
-      const list = res.data?.data || [];
+      const list = (res.data?.data || []).map((r: any) => ({
+        id: r.id,
+        patient_id: r.patient_id,
+        doctor_id: r.doctor_id || '',
+        patientName: r.patient_name,
+        doctorName: r.doctor_name,
+        date: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : '',
+        created_at: r.created_at,
+        report_type: r.report_type,
+        title: r.title,
+        description: r.description || '',
+        file_url: r.file_url,
+        summary: r.ai_summary,
+        ai_summary: r.ai_summary,
+        is_summarized: r.is_summarized || false,
+        tags: r.tags,
+      }));
       set({ reports: list });
     } finally {
       set({ loadingReports: false });
@@ -88,7 +108,22 @@ export const useMedicalStore = create<MedicalState>((set, get) => ({
     set({ loadingPrescriptions: true });
     try {
       const res = await api.get('/prescriptions');
-      const list = res.data?.data || [];
+      const list = (res.data?.data || []).map((p: any) => ({
+        id: p.id,
+        patient_id: p.patient_id,
+        doctor_id: p.doctor_id,
+        patientName: p.patient_name,
+        doctorName: p.doctor_name,
+        prescribed_date: p.prescribed_date,
+        status: p.status || 'active',
+        instructions: p.instructions || '',
+        medications: (p.medications || []).map((m: any) => ({
+          name: m.name,
+          dosage: m.dosage,
+          frequency: m.frequency,
+          duration: m.duration,
+        })),
+      }));
       set({ prescriptions: list });
     } finally {
       set({ loadingPrescriptions: false });

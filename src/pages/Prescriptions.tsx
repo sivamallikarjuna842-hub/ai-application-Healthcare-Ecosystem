@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useMedicalStore, Prescription } from '../store/medicalStore';
+import { api } from '../utils/api';
 import { Pill, ArrowLeft, Plus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
 
 export const Prescriptions = () => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const prescriptions = useMedicalStore((state) => state.getPrescriptions(user?.id || ''));
-  const addPrescription = useMedicalStore((state) => state.addPrescription);
+  const refreshPrescriptions = useMedicalStore((state) => state.refreshPrescriptions);
+  const deletePrescription = useMedicalStore((state) => state.deletePrescription);
 
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,6 +18,12 @@ export const Prescriptions = () => {
     instructions: '',
   });
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Fetch prescriptions from backend on mount
+  useEffect(() => {
+    refreshPrescriptions();
+  }, []);
 
   const isDoctor = user?.role === 'doctor';
 
@@ -46,7 +54,7 @@ export const Prescriptions = () => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const validMeds = formData.medications.filter((med) => med.name && med.dosage);
@@ -54,27 +62,33 @@ export const Prescriptions = () => {
       return;
     }
 
-    const newPrescription: Prescription = {
-      id: Date.now().toString(),
-      patientId: 'p1', // In real app, would be the selected patient
-      patientName: 'John Doe',
-      doctorId: user?.id || '',
-      doctorName: user?.name || '',
-      date: new Date().toISOString().split('T')[0],
-      medications: validMeds,
-      instructions: formData.instructions,
-      status: 'active',
-    };
+    try {
+      setErrorMessage('');
+      await api.post('/prescriptions', {
+        patient_id: user?.id || '',
+        medications: validMeds,
+        instructions: formData.instructions,
+      });
 
-    addPrescription(newPrescription);
-    setSuccessMessage('Prescription created successfully!');
-    setFormData({
-      medications: [{ name: '', dosage: '', frequency: '', duration: '' }],
-      instructions: '',
-    });
-    setShowForm(false);
+      setSuccessMessage('Prescription created successfully!');
+      setFormData({
+        medications: [{ name: '', dosage: '', frequency: '', duration: '' }],
+        instructions: '',
+      });
+      setShowForm(false);
+      await refreshPrescriptions();
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err: any) {
+      setErrorMessage(err?.response?.data?.error || 'Failed to create prescription');
+    }
+  };
 
-    setTimeout(() => setSuccessMessage(''), 3000);
+  const handleDelete = async (prescriptionId: string) => {
+    try {
+      await deletePrescription(prescriptionId);
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -124,6 +138,12 @@ export const Prescriptions = () => {
         {successMessage && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
             {successMessage}
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+            {errorMessage}
           </div>
         )}
 
@@ -298,7 +318,7 @@ export const Prescriptions = () => {
                 <div className="bg-gradient-to-r from-red-50 to-orange-50 border-b border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-lg font-bold text-gray-800">
-                      Prescription from {prescription.doctorName}
+                      Prescription
                     </h3>
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${getStatusColor(
@@ -313,7 +333,7 @@ export const Prescriptions = () => {
                       {prescription.status.charAt(0).toUpperCase() + prescription.status.slice(1)}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600">Date: {prescription.date}</p>
+                  <p className="text-sm text-gray-600">Date: {prescription.prescribed_date ? new Date(prescription.prescribed_date).toLocaleDateString() : 'N/A'}</p>
                 </div>
 
                 {/* Content */}
@@ -325,7 +345,7 @@ export const Prescriptions = () => {
                       Medications
                     </h4>
                     <div className="space-y-3">
-                      {prescription.medications.map((med, index) => (
+                      {prescription.medications?.map((med, index) => (
                         <div
                           key={index}
                           className="flex items-start justify-between p-3 bg-gray-50 rounded-lg"
@@ -362,7 +382,10 @@ export const Prescriptions = () => {
                   {/* Action Buttons */}
                   {isDoctor && (
                     <div className="mt-4 flex justify-end">
-                      <button className="text-red-600 hover:text-red-700 font-medium text-sm flex items-center gap-1">
+                      <button
+                        onClick={() => handleDelete(prescription.id)}
+                        className="text-red-600 hover:text-red-700 font-medium text-sm flex items-center gap-1"
+                      >
                         <Trash2 className="w-4 h-4" />
                         Delete
                       </button>

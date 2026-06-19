@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../utils/api';
 import { Activity, ArrowLeft, AlertCircle, Lightbulb } from 'lucide-react';
 
 const COMMON_SYMPTOMS = [
@@ -17,48 +18,20 @@ const COMMON_SYMPTOMS = [
   'Chest Pain',
 ];
 
-const SYMPTOM_ANALYSIS = {
-  'Fever,Cough,Sore Throat': {
-    condition: 'Common Cold/Flu',
-    severity: 'Low to Moderate',
-    advice:
-      'Rest, stay hydrated, and use over-the-counter medications. See a doctor if symptoms persist beyond 2 weeks.',
-    urgency: 'Not urgent',
-  },
-  'Fever,Cough,Shortness of Breath': {
-    condition: 'Respiratory Infection',
-    severity: 'Moderate to High',
-    advice:
-      'Seek medical attention. Could be pneumonia or bronchitis. Get professional evaluation.',
-    urgency: 'Schedule appointment soon',
-  },
-  'Chest Pain,Shortness of Breath': {
-    condition: 'Potential Cardiac Issue',
-    severity: 'High',
-    advice: 'Seek emergency medical care immediately. Do not delay.',
-    urgency: 'EMERGENCY - Call 911',
-  },
-  'Headache,Fever': {
-    condition: 'Possible Infection',
-    severity: 'Moderate',
-    advice:
-      'Rest and monitor. Use fever-reducing medications. Seek care if symptoms worsen.',
-    urgency: 'Schedule appointment',
-  },
-  'Fatigue,Body Aches,Fever': {
-    condition: 'Viral Illness',
-    severity: 'Moderate',
-    advice:
-      'Rest, stay hydrated, and use supportive care. Recovery typically takes 1-2 weeks.',
-    urgency: 'Monitor, see doctor if worsens',
-  },
-};
-
 export const SymptomChecker = () => {
   const navigate = useNavigate();
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [disclaimerAccepted, setDisclaimerAccepted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [analysis, setAnalysis] = useState<{
+    condition: string;
+    severity: string;
+    advice: string;
+    urgency: string;
+    possible_conditions?: any[];
+    confidence_score?: number;
+  } | null>(null);
 
   const toggleSymptom = (symptom: string) => {
     setSelectedSymptoms((prev) =>
@@ -68,25 +41,80 @@ export const SymptomChecker = () => {
     );
   };
 
-  const getAnalysis = () => {
-    const key = selectedSymptoms.sort().join(',');
-    return (
-      SYMPTOM_ANALYSIS[key as keyof typeof SYMPTOM_ANALYSIS] || {
-        condition: 'General Symptoms',
-        severity: 'Requires Professional Evaluation',
-        advice:
-          'Based on your symptoms, it is recommended to consult with a healthcare professional for proper diagnosis and treatment.',
-        urgency: 'Schedule appointment with doctor',
-      }
-    );
-  };
-
-  const analysis = getAnalysis();
-
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (selectedSymptoms.length === 0) return;
     if (!disclaimerAccepted) return;
-    setShowResults(true);
+    
+    setLoading(true);
+    try {
+      const res = await api.post('/ai/symptom-check', {
+        symptoms: selectedSymptoms,
+      });
+      const data = res.data;
+      const aiAnalysis = data?.analysis;
+      
+      if (aiAnalysis) {
+        setAnalysis({
+          condition: aiAnalysis.possible_conditions?.[0]?.name || 'General Symptoms',
+          severity: aiAnalysis.severity || 'Requires Professional Evaluation',
+          advice: aiAnalysis.recommendations?.join('. ') || 'Consult with a healthcare professional',
+          urgency: aiAnalysis.urgency || 'Schedule appointment with doctor',
+          possible_conditions: aiAnalysis.possible_conditions,
+          confidence_score: aiAnalysis.confidence_score,
+        });
+      } else {
+        // Fallback to local analysis if API fails
+        setAnalysis(getLocalAnalysis());
+      }
+    } catch (err) {
+      console.error('AI analysis failed, using local fallback:', err);
+      setAnalysis(getLocalAnalysis());
+    } finally {
+      setLoading(false);
+      setShowResults(true);
+    }
+  };
+
+  const getLocalAnalysis = () => {
+    const key = selectedSymptoms.sort().join(',');
+    const localResults: Record<string, { condition: string; severity: string; advice: string; urgency: string }> = {
+      'Fever,Cough,Sore Throat': {
+        condition: 'Common Cold/Flu',
+        severity: 'Low to Moderate',
+        advice: 'Rest, stay hydrated, and use over-the-counter medications. See a doctor if symptoms persist beyond 2 weeks.',
+        urgency: 'Not urgent',
+      },
+      'Fever,Cough,Shortness of Breath': {
+        condition: 'Respiratory Infection',
+        severity: 'Moderate to High',
+        advice: 'Seek medical attention. Could be pneumonia or bronchitis. Get professional evaluation.',
+        urgency: 'Schedule appointment soon',
+      },
+      'Chest Pain,Shortness of Breath': {
+        condition: 'Potential Cardiac Issue',
+        severity: 'High',
+        advice: 'Seek emergency medical care immediately. Do not delay.',
+        urgency: 'EMERGENCY - Call 911',
+      },
+      'Headache,Fever': {
+        condition: 'Possible Infection',
+        severity: 'Moderate',
+        advice: 'Rest and monitor. Use fever-reducing medications. Seek care if symptoms worsen.',
+        urgency: 'Schedule appointment',
+      },
+      'Fatigue,Body Aches,Fever': {
+        condition: 'Viral Illness',
+        severity: 'Moderate',
+        advice: 'Rest, stay hydrated, and use supportive care. Recovery typically takes 1-2 weeks.',
+        urgency: 'Monitor, see doctor if worsens',
+      },
+    };
+    return localResults[key] || {
+      condition: 'General Symptoms',
+      severity: 'Requires Professional Evaluation',
+      advice: 'Based on your symptoms, it is recommended to consult with a healthcare professional for proper diagnosis and treatment.',
+      urgency: 'Schedule appointment with doctor',
+    };
   };
 
   const handleBookAppointment = () => {
@@ -211,6 +239,8 @@ export const SymptomChecker = () => {
                     </div>
                   </div>
 
+                  {analysis && (
+                    <>
                   {/* Severity Badge */}
                   <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Estimated Severity</p>
@@ -239,6 +269,8 @@ export const SymptomChecker = () => {
                       </div>
                     </div>
                   </div>
+                  </>
+                  )}
 
                   {/* Actions */}
                   <div className="flex gap-4">

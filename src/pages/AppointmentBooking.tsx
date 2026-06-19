@@ -1,54 +1,56 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useAppointmentStore } from '../store/appointmentStore';
+import { api } from '../utils/api';
 import { Calendar, Clock, ArrowLeft, Plus } from 'lucide-react';
 
-const DOCTORS = [
-  {
-    id: 'd1',
-    name: 'Dr. Sarah Johnson',
-    specialty: 'General Medicine',
-    available: ['10:00 AM', '11:00 AM', '02:00 PM', '03:00 PM'],
-    avatar: '👩‍⚕️',
-  },
-  {
-    id: 'd2',
-    name: 'Dr. Michael Chen',
-    specialty: 'Cardiology',
-    available: ['09:00 AM', '11:00 AM', '01:00 PM'],
-    avatar: '👨‍⚕️',
-  },
-  {
-    id: 'd3',
-    name: 'Dr. Emily Watson',
-    specialty: 'Neurology',
-    available: ['10:00 AM', '02:00 PM', '04:00 PM'],
-    avatar: '👩‍⚕️',
-  },
-  {
-    id: 'd4',
-    name: 'Dr. James Wilson',
-    specialty: 'Orthopedics',
-    available: ['09:00 AM', '10:30 AM', '03:00 PM'],
-    avatar: '👨‍⚕️',
-  },
-];
+interface Doctor {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  doctor_profile?: {
+    specialty: string;
+    consultation_fee: number;
+    rating: number;
+    experience_years: number;
+  };
+}
 
 export const AppointmentBooking = () => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const createAppointment = useAppointmentStore((state) => state.createAppointment);
 
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
+
   const [formData, setFormData] = useState({
-    selectedDoctor: null as (typeof DOCTORS)[0] | null,
+    selectedDoctor: null as Doctor | null,
     date: '',
     time: '',
     reason: '',
   });
   const [successMessage, setSuccessMessage] = useState('');
 
-  const handleDoctorSelect = (doctor: (typeof DOCTORS)[0]) => {
+  // Fetch doctors from backend API
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const res = await api.get('/doctors');
+        const data = res.data;
+        setDoctors(data?.data || []);
+      } catch (err) {
+        console.error('Failed to fetch doctors:', err);
+      } finally {
+        setLoadingDoctors(false);
+      }
+    };
+    fetchDoctors();
+  }, []);
+
+  const handleDoctorSelect = (doctor: Doctor) => {
     setFormData((prev) => ({
       ...prev,
       selectedDoctor: doctor,
@@ -131,30 +133,34 @@ export const AppointmentBooking = () => {
             <div className="bg-white rounded-lg shadow p-6 mb-8">
               <h2 className="text-xl font-bold text-gray-800 mb-6">Select a Doctor</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {DOCTORS.map((doctor) => (
-                  <button
-                    key={doctor.id}
-                    onClick={() => handleDoctorSelect(doctor)}
-                    className={`p-4 rounded-lg border-2 transition text-left ${
-                      formData.selectedDoctor?.id === doctor.id
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3 mb-2">
-                      <span className="text-3xl">{doctor.avatar}</span>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-800">{doctor.name}</h3>
-                        <p className="text-sm text-gray-600">{doctor.specialty}</p>
+              {loadingDoctors ? (
+                <div className="text-center py-8 text-gray-500">Loading doctors...</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {doctors.map((doctor) => (
+                    <button
+                      key={doctor.id}
+                      onClick={() => handleDoctorSelect(doctor)}
+                      className={`p-4 rounded-lg border-2 transition text-left ${
+                        formData.selectedDoctor?.id === doctor.id
+                          ? 'border-blue-600 bg-blue-50'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 mb-2">
+                        <span className="text-3xl">👨‍⚕️</span>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-800">{doctor.name}</h3>
+                          <p className="text-sm text-gray-600">{doctor.doctor_profile?.specialty || 'General'}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-xs text-gray-600 mt-2">
-                      Available slots: {doctor.available.length}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                      <div className="text-xs text-gray-600 mt-2">
+                        {doctor.doctor_profile?.experience_years || 0}+ years experience
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Appointment Details */}
@@ -167,8 +173,8 @@ export const AppointmentBooking = () => {
                   <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Selected Doctor</p>
                     <p className="font-semibold text-gray-800 flex items-center gap-2">
-                      <span className="text-2xl">{formData.selectedDoctor.avatar}</span>
-                      {formData.selectedDoctor.name} ({formData.selectedDoctor.specialty})
+                      <span className="text-2xl">👨‍⚕️</span>
+                      {formData.selectedDoctor.name} ({formData.selectedDoctor.doctor_profile?.specialty || 'General'})
                     </p>
                   </div>
 
@@ -193,30 +199,16 @@ export const AppointmentBooking = () => {
                   {formData.date && (
                     <div className="mb-6">
                       <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Available Time Slots *
+                        Preferred Time * <span className="text-gray-400 font-normal">(HH:MM AM/PM)</span>
                       </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {formData.selectedDoctor.available.map((timeSlot) => (
-                          <button
-                            key={timeSlot}
-                            type="button"
-                            onClick={() =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                time: timeSlot,
-                              }))
-                            }
-                            className={`p-2 rounded-lg border-2 transition font-medium text-sm ${
-                              formData.time === timeSlot
-                                ? 'border-blue-600 bg-blue-50 text-blue-900'
-                                : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                            }`}
-                          >
-                            <Clock className="w-3 h-3 inline mr-1" />
-                            {timeSlot}
-                          </button>
-                        ))}
-                      </div>
+                      <input
+                        type="time"
+                        name="time"
+                        value={formData.time}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        required
+                      />
                     </div>
                   )}
 

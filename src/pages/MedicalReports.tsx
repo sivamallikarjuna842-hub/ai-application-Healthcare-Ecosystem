@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useMedicalStore } from '../store/medicalStore';
@@ -18,7 +18,9 @@ export const MedicalReports = () => {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const reports = useMedicalStore((state) => state.getReports(user?.id || ''));
-  const addReport = useMedicalStore((state) => state.addReport);
+  const uploadReport = useMedicalStore((state) => state.uploadReport);
+  const refreshReports = useMedicalStore((state) => state.refreshReports);
+  const deleteReport = useMedicalStore((state) => state.deleteReport);
 
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -28,6 +30,11 @@ export const MedicalReports = () => {
     file: null as File | null,
   });
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Fetch reports from backend on mount
+  useEffect(() => {
+    refreshReports({ patient_id: user?.id });
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -47,37 +54,41 @@ export const MedicalReports = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title || !formData.description) {
+    if (!formData.title || !formData.description || !formData.file) {
       return;
     }
 
-    const newReport = {
-      id: Date.now().toString(),
-      patientId: user?.id || '',
-      patientName: user?.name || '',
-      doctorId: 'd1',
-      doctorName: 'Dr. Sarah Johnson',
-      date: new Date().toISOString().split('T')[0],
-      type: formData.type as any,
-      title: formData.title,
-      description: formData.description,
-      fileUrl: `/reports/${Date.now()}.pdf`,
-    };
+    try {
+      await uploadReport({
+        patient_id: user?.id || '',
+        report_type: formData.type,
+        title: formData.title,
+        description: formData.description,
+        file: formData.file,
+      });
+      setSuccessMessage('Report uploaded successfully!');
+      setFormData({
+        type: 'lab_test',
+        title: '',
+        description: '',
+        file: null,
+      });
+      setShowUploadForm(false);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      console.error('Upload failed:', err);
+    }
+  };
 
-    addReport(newReport);
-    setSuccessMessage('Report uploaded successfully!');
-    setFormData({
-      type: 'lab_test',
-      title: '',
-      description: '',
-      file: null,
-    });
-    setShowUploadForm(false);
-
-    setTimeout(() => setSuccessMessage(''), 3000);
+  const handleDelete = async (reportId: string) => {
+    try {
+      await deleteReport(reportId);
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
   };
 
   const isDoctor = user?.role === 'doctor';
@@ -181,7 +192,7 @@ export const MedicalReports = () => {
               {/* File Upload */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Attach File (PDF, Image)
+                  Attach File (PDF, Image) *
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
                   <input
@@ -189,6 +200,7 @@ export const MedicalReports = () => {
                     onChange={handleFileChange}
                     accept=".pdf,.jpg,.jpeg,.png"
                     className="w-full"
+                    required
                   />
                   {formData.file && (
                     <p className="text-sm text-gray-600 mt-2">
@@ -256,21 +268,21 @@ export const MedicalReports = () => {
                           <p className="text-sm text-gray-600 mt-1">{report.description}</p>
                           <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                             <span>
-                              Type: <span className="font-medium">{report.type.replace('_', ' ')}</span>
+                              Type: <span className="font-medium">{report.report_type?.replace('_', ' ') || 'N/A'}</span>
                             </span>
                             <span>
-                              Date: <span className="font-medium">{report.date}</span>
+                              Date: <span className="font-medium">{report.created_at ? new Date(report.created_at).toLocaleDateString() : 'N/A'}</span>
                             </span>
                             <span>
-                              By: <span className="font-medium">{report.doctorName}</span>
+                              By: <span className="font-medium">{report.doctorName || 'Doctor'}</span>
                             </span>
                           </div>
 
-                          {report.summary && (
+                          {report.ai_summary && (
                             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                               <p className="text-sm">
                                 <span className="font-semibold text-blue-900">AI Summary:</span>
-                                <span className="text-blue-800"> {report.summary}</span>
+                                <span className="text-blue-800"> {report.ai_summary}</span>
                               </p>
                             </div>
                           )}
@@ -287,7 +299,10 @@ export const MedicalReports = () => {
                         <Download className="w-5 h-5" />
                       </button>
                       {isDoctor && (
-                        <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition">
+                        <button
+                          onClick={() => handleDelete(report.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                        >
                           <Trash2 className="w-5 h-5" />
                         </button>
                       )}
@@ -315,13 +330,13 @@ export const MedicalReports = () => {
             <div className="bg-white rounded-lg shadow p-6 text-center">
               <p className="text-gray-600 text-sm">Report Types</p>
               <p className="text-3xl font-bold text-green-600">
-                {new Set(reports.map((r) => r.type)).size}
+                {new Set(reports.map((r) => r.report_type)).size}
               </p>
             </div>
             <div className="bg-white rounded-lg shadow p-6 text-center">
               <p className="text-gray-600 text-sm">With AI Summary</p>
               <p className="text-3xl font-bold text-orange-600">
-                {reports.filter((r) => r.summary).length}
+                {reports.filter((r) => r.ai_summary).length}
               </p>
             </div>
           </div>

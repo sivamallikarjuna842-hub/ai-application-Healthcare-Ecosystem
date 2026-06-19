@@ -48,7 +48,17 @@ export async function loginRequest(email: string, password: string) {
   const data = res.data;
   if (!data?.access_token) throw new Error(data?.error || 'Login failed');
   saveAccessToken(data.access_token);
-  const user = data.user as User;
+  // Map backend user fields to frontend User type
+  const rawUser = data.user;
+  const user: User = {
+    id: rawUser.id,
+    name: rawUser.full_name || `${rawUser.first_name} ${rawUser.last_name}`,
+    email: rawUser.email,
+    role: rawUser.role,
+    avatar: rawUser.avatar,
+    specialty: rawUser.doctor_profile?.specialty,
+    licenseNumber: rawUser.doctor_profile?.license_number,
+  };
   saveUserToStorage(user);
   return user;
 }
@@ -58,7 +68,17 @@ export async function fetchMe() {
   const res = await api.get('/auth/me');
   const data = res.data;
   if (!data?.user) throw new Error(data?.error || 'Failed to load user');
-  const user = data.user as User;
+  const rawUser = data.user;
+  // Map backend user fields to frontend User type
+  const user: User = {
+    id: rawUser.id,
+    name: rawUser.full_name || `${rawUser.first_name} ${rawUser.last_name}`,
+    email: rawUser.email,
+    role: rawUser.role,
+    avatar: rawUser.avatar,
+    specialty: rawUser.doctor_profile?.specialty,
+    licenseNumber: rawUser.doctor_profile?.license_number,
+  };
   saveUserToStorage(user);
   return user;
 }

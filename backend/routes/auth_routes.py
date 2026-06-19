@@ -64,8 +64,9 @@ def login():
     if not data or not all(k in data for k in ['email', 'password']):
         return {'error': 'Missing email or password'}, 400
     
-    # Find user
-    user = User.query.filter_by(email=data['email']).first()
+    # Find user (case-insensitive email)
+    from sqlalchemy import func
+    user = User.query.filter(func.lower(User.email) == func.lower(data['email'])).first()
     
     if not user or not user.check_password(data['password']):
         return {'error': 'Invalid email or password'}, 401

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useAppointmentStore } from '../store/appointmentStore';
+import { useMedicalStore } from '../store/medicalStore';
 import {
   Users,
   Calendar,
@@ -21,6 +22,12 @@ export const DoctorDashboard = () => {
   const allAppointments = useAppointmentStore((state) =>
     state.getAppointments(user?.id || '', 'doctor')
   );
+  const refreshAppointments = useAppointmentStore((state) => state.refresh);
+
+  // Fetch data from backend on mount
+  useEffect(() => {
+    refreshAppointments('doctor');
+  }, []);
 
   const handleLogout = () => {
     logout();

@@ -74,7 +74,8 @@ def create_app(config_name=None):
     # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
-    CORS(app, origins=app.config['CORS_ORIGINS'])
+    # Allow all origins for development
+    CORS(app, origins="*", supports_credentials=True)
     
     # Setup logging
     setup_logging(app)
@@ -177,5 +178,6 @@ def setup_logging(app):
 
 
 if __name__ == '__main__':
+    from flask import Flask
     app = create_app()
     app.run(debug=True, host='0.0.0.0', port=5000)
